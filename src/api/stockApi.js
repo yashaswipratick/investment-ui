@@ -24,4 +24,8 @@ export const api = {
 
   // OpenAI key status
   getKeyStatus: () => defaultClient.get(`${BASE}/openai/key-status`).then(r => r.data),
+
+  // Latest close price from stock_history DB (no external API, no CORS issues)
+  getLatestPrice: (symbol) =>
+    defaultClient.get(`${BASE}/latest-price/${symbol}`).then(r => r.data),
 }
