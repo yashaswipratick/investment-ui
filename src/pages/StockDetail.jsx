@@ -12,13 +12,39 @@ const PERIODS = ['6M', '1Y', '2Y', '3Y']
 export default function StockDetail() {
   const { symbol } = useParams()
   const navigate   = useNavigate()
-  const [data, setData]       = useState(null)
-  const [period, setPeriod]   = useState('1Y')
-  const [loading, setLoading] = useState(true)
+  const [data, setData]           = useState(null)
+  const [period, setPeriod]       = useState('1Y')
+  const [loading, setLoading]     = useState(true)
   const [analysing, setAnalysing] = useState(false)
+  const [livePrice, setLivePrice] = useState(null)
+  const [livePriceLoading, setLivePriceLoading] = useState(false)
+
+  // Fetch live price from Yahoo Finance via our backend proxy
+  const fetchLivePrice = () => {
+    setLivePriceLoading(true)
+    fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}.NS?interval=1d&range=2d`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    })
+      .then(r => r.json())
+      .then(d => {
+        const meta = d?.chart?.result?.[0]?.meta
+        if (meta) {
+          setLivePrice({
+            price:   meta.regularMarketPrice?.toFixed(2),
+            prev:    meta.chartPreviousClose?.toFixed(2),
+            change:  meta.regularMarketPrice && meta.chartPreviousClose
+                       ? ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose * 100).toFixed(2)
+                       : null,
+          })
+        }
+      })
+      .catch(() => setLivePrice(null))
+      .finally(() => setLivePriceLoading(false))
+  }
 
   const load = () => {
     setLoading(true)
+    fetchLivePrice()
     api.getResult(symbol).then(d => {
       setData(d)
       // Default to best available period
@@ -67,9 +93,27 @@ export default function StockDetail() {
             <ArrowLeft size={16}/>
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-white">{symbol}</h1>
-            <p className="text-gray-400 text-sm">
-              {pData?.dataFrom} → {pData?.dataTo} · {pData?.totalDataPoints || 0} candles
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl font-bold text-white">{symbol}</h1>
+              {/* Live current price */}
+              {livePriceLoading ? (
+                <span className="text-gray-500 text-sm animate-pulse">Loading price…</span>
+              ) : livePrice ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-bold text-white">₹{livePrice.price}</span>
+                  <span className={`text-sm font-semibold px-2 py-0.5 rounded ${
+                    parseFloat(livePrice.change) >= 0
+                      ? 'text-green-400 bg-green-900/30'
+                      : 'text-red-400 bg-red-900/30'
+                  }`}>
+                    {parseFloat(livePrice.change) >= 0 ? '+' : ''}{livePrice.change}% today
+                  </span>
+                  <span className="text-xs text-gray-500">Live</span>
+                </div>
+              ) : null}
+            </div>
+            <p className="text-gray-400 text-sm mt-0.5">
+              Analysis: {pData?.dataFrom} → {pData?.dataTo} · {pData?.totalDataPoints || 0} candles
             </p>
           </div>
         </div>
@@ -496,23 +540,55 @@ export default function StockDetail() {
 
           {/* Right column */}
           <div className="space-y-5">
-            {/* Entry timing */}
+            {/* Entry timing — with explicit price instructions */}
             <div className="card">
               <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
                 <Target size={15} className="text-blue-400"/>
                 When to Invest
               </h3>
+
+              {/* Signal badge */}
               <div className={`text-center py-2 rounded-lg mb-3 text-sm font-bold
                 ${entry.goodTimeToInvest ? 'bg-green-900/30 text-green-400 border border-green-800' : 'bg-amber-900/30 text-amber-400 border border-amber-800'}`}>
                 {entry.signal?.replace(/_/g, ' ') || '—'}
               </div>
+
+              {/* ── Explicit price action table ──────────────────────── */}
+              <div className="space-y-2 mb-3">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-green-900/20 border border-green-900 rounded-lg p-2.5">
+                    <p className="text-green-500 font-semibold mb-0.5">📥 BUY / Enter at</p>
+                    <p className="text-white font-bold text-sm">
+                      ₹{rec.entryPriceLow?.toFixed(0)} – ₹{rec.entryPriceHigh?.toFixed(0)}
+                    </p>
+                    <p className="text-green-600 mt-0.5">Ideal entry zone</p>
+                  </div>
+                  <div className="bg-blue-900/20 border border-blue-900 rounded-lg p-2.5">
+                    <p className="text-blue-400 font-semibold mb-0.5">🎯 SELL / Exit at</p>
+                    <p className="text-white font-bold text-sm">₹{rec.targetPrice?.toFixed(0)}</p>
+                    <p className="text-blue-600 mt-0.5">Target price (+{rec.potentialUpsidePct?.toFixed(1)}%)</p>
+                  </div>
+                  <div className="bg-red-900/20 border border-red-900 rounded-lg p-2.5 col-span-2">
+                    <p className="text-red-400 font-semibold mb-0.5">🛑 STOP LOSS — Exit immediately if below</p>
+                    <p className="text-white font-bold text-sm">₹{rec.stopLossPrice?.toFixed(0)}</p>
+                    <p className="text-red-600 mt-0.5">
+                      {rec.potentialDownsidePct != null ? `Risk: ${Math.abs(rec.potentialDownsidePct).toFixed(1)}% from entry` : ''}
+                      {livePrice && rec.stopLossPrice
+                        ? ` · Currently ${parseFloat(livePrice.price) > rec.stopLossPrice ? '✓ Above SL' : '⚠️ Below SL!'}`
+                        : ''}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Current situation & trigger */}
               <div className="space-y-2 text-sm">
                 <div>
                   <p className="text-gray-500 text-xs">Current Situation</p>
                   <p className="text-gray-300 text-xs mt-1 leading-relaxed">{entry.currentSituation || '—'}</p>
                 </div>
                 <div className="bg-gray-800 rounded-lg p-2.5">
-                  <p className="text-gray-500 text-xs mb-1">Entry Trigger</p>
+                  <p className="text-gray-500 text-xs mb-1">What to watch for before buying</p>
                   <p className="text-gray-200 text-xs leading-relaxed">{entry.entryTrigger || '—'}</p>
                 </div>
                 <div className="bg-indigo-900/20 border border-indigo-800 rounded-lg p-2.5">
