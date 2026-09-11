@@ -24,4 +24,38 @@ export const api = {
 
   // OpenAI key status
   getKeyStatus: () => defaultClient.get(`${BASE}/openai/key-status`).then(r => r.data),
+
+  // Download all persisted stock history rows as CSV
+  downloadStockHistoryCsv: (stockName) =>
+    defaultClient.post('/stock/investment/v1.0/stockHistoryCSV', { stockName }, {
+      responseType: 'blob',
+    }).then(response => {
+      const contentDisposition = response.headers['content-disposition'] || ''
+      const match = contentDisposition.match(/filename="?([^";]+)"?/i)
+      const filename = match?.[1] || `${stockName.toUpperCase()}_stock_history.csv`
+
+      const url = window.URL.createObjectURL(response.data)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    }),
+
+  // Download multiple persisted stock histories as one ZIP
+  downloadStockHistoryCsvBulk: (stockNames) =>
+    defaultClient.post('/stock/investment/v1.0/stockHistoryCSV/bulk', { stockNames }, {
+      responseType: 'blob',
+    }).then(response => {
+      const url = window.URL.createObjectURL(response.data)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'stock_history_csv.zip'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    }),
 }

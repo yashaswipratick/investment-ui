@@ -65,8 +65,8 @@ coverage/
 
 # ── Package manager lock files (keep only one) ───────────────────────────────
 # Uncomment the ones you DON'T use:
-# package-lock.json   # keep if using npm
-# yarn.lock           # keep if using yarn
+package-lock.json   # keep if using npm
+yarn.lock           # keep if using yarn
 # pnpm-lock.yaml      # keep if using pnpm
 
 # ── Misc ──────────────────────────────────────────────────────────────────────

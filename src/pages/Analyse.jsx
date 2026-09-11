@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Zap, CheckCircle, XCircle, Clock, RefreshCw } from 'lucide-react'
+import { Zap, CheckCircle, XCircle, Clock, RefreshCw, Download } from 'lucide-react'
 import { api } from '../api/stockApi'
 
 const PRESET_STOCKS = ['INFY','TCS','RELIANCE','HDFCBANK','ICICIBANK','BHARTIARTL','WIPRO',
@@ -21,6 +21,9 @@ export default function Analyse() {
   const [running, setRunning]             = useState(false)
   const [symbols, setSymbols]             = useState([])
   const [selectedRefetch, setSelectedRefetch] = useState(new Set())
+  const [downloadingCsv, setDownloadingCsv] = useState(false)
+  const [bulkCsvStocks, setBulkCsvStocks] = useState('')
+  const [downloadingBulkCsv, setDownloadingBulkCsv] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -61,6 +64,43 @@ export default function Analyse() {
   }
 
   const removeFromQueue = (sym) => setQueue(prev => prev.filter(q => q.symbol !== sym))
+
+  const downloadCsv = async () => {
+    const stockName = symbol.trim().toUpperCase()
+    if (!stockName || downloadingCsv) return
+
+    setDownloadingCsv(true)
+    try {
+      await api.downloadStockHistoryCsv(stockName)
+    } catch (err) {
+      const status = err?.response?.status
+      if (status === 404) {
+        alert(`No stock history found for ${stockName}`)
+      } else {
+        alert(`Unable to download stock history for ${stockName}`)
+      }
+    } finally {
+      setDownloadingCsv(false)
+    }
+  }
+
+  const downloadBulkCsv = async () => {
+    const requested = bulkCsvStocks
+      .split(',')
+      .map(stock => stock.trim())
+      .filter(Boolean)
+    if (requested.length === 0 || downloadingBulkCsv) return
+    setDownloadingBulkCsv(true)
+    try {
+      await api.downloadStockHistoryCsvBulk(requested.join(','))
+    } catch (err) {
+      alert(err?.response?.status === 404
+        ? 'No stock history found for the selected stocks'
+        : 'Unable to download the selected stock histories')
+    } finally {
+      setDownloadingBulkCsv(false)
+    }
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-3xl">
@@ -132,6 +172,34 @@ export default function Analyse() {
                 </button>
               )
             })}
+          </div>
+
+          <div className="border-t border-gray-800 pt-3 space-y-2">
+            <div>
+              <p className="text-sm font-semibold text-white flex items-center gap-2">
+                <Download size={14} className="text-emerald-400"/>
+                Download Stock History CSVs
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Enter stock names comma-separated. Example: APOLLO, INFY, TCS
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={bulkCsvStocks}
+                onChange={e => setBulkCsvStocks(e.target.value)}
+                placeholder="APOLLO, INFY, TCS"
+                className="flex-1 min-w-0 bg-gray-900 border border-gray-700 focus:border-emerald-600 outline-none text-white px-3 py-2 rounded-lg text-sm"
+              />
+              <button
+                onClick={downloadBulkCsv}
+                disabled={!bulkCsvStocks.trim() || downloadingBulkCsv}
+                className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
+              >
+                <Download size={14}/>
+                {downloadingBulkCsv ? 'Downloading…' : 'Download CSVs'}
+              </button>
+            </div>
           </div>
 
           {selectedRefetch.size === 0 && (
@@ -217,6 +285,15 @@ export default function Analyse() {
           <button onClick={() => addToQueue(symbol)}
             className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition-colors whitespace-nowrap">
             Add
+          </button>
+          <button
+            onClick={downloadCsv}
+            disabled={!symbol.trim() || downloadingCsv}
+            title="Download persisted stock history as CSV"
+            className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white px-3 py-2 rounded-lg text-sm transition-colors whitespace-nowrap"
+          >
+            <Download size={14}/>
+            {downloadingCsv ? 'Downloading…' : 'CSV'}
           </button>
           {queue.length > 0 && (
             <button onClick={runQueue} disabled={running}
