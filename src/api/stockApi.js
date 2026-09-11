@@ -58,4 +58,8 @@ export const api = {
       link.remove()
       window.URL.revokeObjectURL(url)
     }),
+
+  // Latest close price from stock_history DB (no external API, no CORS issues)
+  getLatestPrice: (symbol) =>
+    defaultClient.get(`${BASE}/latest-price/${symbol}`).then(r => r.data),
 }

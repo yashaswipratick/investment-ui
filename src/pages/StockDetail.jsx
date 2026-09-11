@@ -19,22 +19,17 @@ export default function StockDetail() {
   const [livePrice, setLivePrice] = useState(null)
   const [livePriceLoading, setLivePriceLoading] = useState(false)
 
-  // Fetch live price from Yahoo Finance via our backend proxy
+  // Fetch latest close price from stock_history Cassandra table via backend
   const fetchLivePrice = () => {
     setLivePriceLoading(true)
-    fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}.NS?interval=1d&range=2d`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    })
-      .then(r => r.json())
+    api.getLatestPrice(symbol)
       .then(d => {
-        const meta = d?.chart?.result?.[0]?.meta
-        if (meta) {
+        if (d?.closePrice) {
           setLivePrice({
-            price:   meta.regularMarketPrice?.toFixed(2),
-            prev:    meta.chartPreviousClose?.toFixed(2),
-            change:  meta.regularMarketPrice && meta.chartPreviousClose
-                       ? ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose * 100).toFixed(2)
-                       : null,
+            price:  d.closePrice?.toFixed(2),
+            prev:   d.prevClose?.toFixed(2),
+            change: d.changePercent?.toFixed(2),
+            date:   d.latestDate,
           })
         }
       })
@@ -108,7 +103,7 @@ export default function StockDetail() {
                   }`}>
                     {parseFloat(livePrice.change) >= 0 ? '+' : ''}{livePrice.change}% today
                   </span>
-                  <span className="text-xs text-gray-500">Live</span>
+                  <span className="text-xs text-gray-500">Close {livePrice.date}</span>
                 </div>
               ) : null}
             </div>
@@ -147,7 +142,28 @@ export default function StockDetail() {
         <div className="card text-center py-12">
           <p className="text-gray-400">No analysis for {period} period. Click Re-analyse to run it.</p>
         </div>
-      ) : (
+      ) : (<>
+        {/* Stale data banner — shown when new features are missing from old analysis */}
+        {pData && !tech?.candlestickSignals && (
+          <div className="flex items-center gap-3 bg-amber-900/30 border border-amber-700 rounded-xl px-4 py-3 text-sm">
+            <span className="text-amber-400 text-lg">⚠️</span>
+            <div>
+              <p className="text-amber-300 font-semibold">Analysis needs refresh</p>
+              <p className="text-amber-500 text-xs mt-0.5">
+                Breakout analysis, chart patterns, candlestick signals and backtest results are missing from this older analysis.
+                Click <strong>Re-analyse</strong> to regenerate with all new features.
+              </p>
+            </div>
+            <button
+              onClick={runAnalysis}
+              disabled={analysing}
+              className="ml-auto flex items-center gap-1.5 text-xs bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors"
+            >
+              <RefreshCw size={12} className={analysing ? 'animate-spin' : ''}/>
+              {analysing ? 'Running…' : 'Re-analyse now'}
+            </button>
+          </div>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Left column — main analysis */}
           <div className="lg:col-span-2 space-y-5">
@@ -662,7 +678,7 @@ export default function StockDetail() {
             </div>
           )}
         </div>
-      )}
+      </>)}
     </div>
   )
 }
